@@ -30,6 +30,12 @@ class MissingEnv(Exception):
     pass
 
 
+class MissingKey(Exception):
+    """Отсутствует необходимый ключ в словаре."""
+
+    pass
+
+
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
@@ -48,14 +54,11 @@ HOMEWORK_STATUSES = {
 
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
-    chat_id = TELEGRAM_CHAT_ID
     try:
-        bot.send_message(chat_id, message)
-        msg = 'Успешная отправка сообщения в Telegram'
-        logger.info(msg)
+        bot.send_message(TELEGRAM_CHAT_ID, message)
+        logger.info('Успешная отправка сообщения в Telegram')
     except Exception:
-        msg = 'Сбой при отправке сообщения в Telegram'
-        logger.error(msg)
+        logger.error('Сбой при отправке сообщения в Telegram')
 
 
 def get_api_answer(current_timestamp):
@@ -91,17 +94,19 @@ def parse_status(homework):
     try:
         homework_name = homework.get('homework_name')
         homework_status = homework.get('status')
-    except KeyError:
-        msg = ('отсутствие ожидаемых ключей homework_name'
-               'и status в ответе API')
-        logger.error(msg)
+        if homework_name or homework_status is None:
+            raise MissingKey('отсутствие ожидаемых ключей homework_name'
+                             'и status в ответе API')
+    except MissingKey:
+        logger.error('отсутствие ожидаемых ключей homework_name'
+                     'и status в ответе API')
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    if PRACTICUM_TOKEN and TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
         return True
     else:
         return False
@@ -111,36 +116,31 @@ def main():
     """Основная логика работы бота."""
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
-    message = ''
-    try:
-        if check_tokens():
-            logger.debug('Все переменные окружения на месте')
-            msg = 'Все переменные окружения на месте'
-        else:
-            msg = ('Отсутствует одна или несколько переменных окружения')
-            logger.critical(msg)
-            raise MissingEnv(msg)
-    except MissingEnv:
-        sys.exit()
+    message_error = ''
+    if check_tokens():
+        logger.debug('Все переменные окружения на месте')
+        msg = 'Все переменные окружения на месте'
+    else:
+        msg = ('Отсутствует одна или несколько переменных окружения')
+        logger.critical(msg)
+        raise MissingEnv(msg)
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homework = check_response(response)
             try:
                 message = parse_status(homework[0])
-                print(message)
+                send_message(bot, message)
             except IndexError:
-                msg = 'Отсутствие в ответе новых статусов домашки'
-                logger.debug(msg)
-            send_message(bot, message)
+                logger.debug('Отсутствие в ответе новых статусов домашки')
             current_timestamp = response.get('current_date', current_timestamp)
-            time.sleep(RETRY_TIME)
         except Exception as error:
-            new_message = f'Сбой в работе программы: {error}'
-            if message != new_message:
-                bot.send_message(TELEGRAM_CHAT_ID, new_message)
-            message = new_message
+            new_message_error = f'Сбой в работе программы: {error}'
+            if message_error != new_message_error:
+                bot.send_message(TELEGRAM_CHAT_ID, new_message_error)
+            message_error = new_message_error
             current_timestamp = int(time.time())
+        finally:
             time.sleep(RETRY_TIME)
 
 

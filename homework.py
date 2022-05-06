@@ -77,12 +77,12 @@ def get_api_answer(current_timestamp):
 def check_response(response):
     """Проверяет ответ API на корректность."""
     if not isinstance(response, dict):
-        msg = ('Недокументированный статус домашней работы,'
+        msg = ('Недокументированный статус домашней работы, '
                'обнаруженный в ответе API')
         logger.error(msg)
         raise TypeError(msg)
     if not isinstance(response['homeworks'], list):
-        msg = ('Недокументированный статус домашней работы,'
+        msg = ('Недокументированный статус домашней работы, '
                'обнаруженный в ответе API')
         logger.error(msg)
         raise TypeError(msg)
@@ -94,11 +94,11 @@ def parse_status(homework):
     try:
         homework_name = homework.get('homework_name')
         homework_status = homework.get('status')
-        if homework_name or homework_status is None:
-            raise MissingKey('отсутствие ожидаемых ключей homework_name'
+        if homework_name is None or homework_status is None:
+            raise MissingKey('отсутствие ожидаемых ключей homework_name '
                              'и status в ответе API')
     except MissingKey:
-        logger.error('отсутствие ожидаемых ключей homework_name'
+        logger.error('отсутствие ожидаемых ключей homework_name '
                      'и status в ответе API')
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
@@ -106,10 +106,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        return True
-    else:
-        return False
+    return all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
 
 
 def main():
